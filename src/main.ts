@@ -24,6 +24,25 @@ const statusPanelDiv = document.createElement("div");
 statusPanelDiv.id = "statusPanel";
 document.body.append(statusPanelDiv);
 
+// Inventory UI
+const inventoryDiv = document.createElement("div");
+inventoryDiv.id = "inventory";
+
+const inventoryTitle = document.createElement("div");
+inventoryTitle.className = "inventory-title";
+inventoryTitle.textContent = "Inventory";
+
+const inventorySlot = document.createElement("div");
+inventorySlot.className = "inventory-slot";
+
+const inventoryToken = document.createElement("div");
+inventoryToken.className = "token-icon inventory-token";
+
+inventorySlot.appendChild(inventoryToken);
+inventoryDiv.appendChild(inventoryTitle);
+inventoryDiv.appendChild(inventorySlot);
+statusPanelDiv.appendChild(inventoryDiv);
+
 // Location of Classroom
 const CLASSROOM_COORDINATES = leaflet.latLng(
   36.997936938057016,
@@ -35,6 +54,7 @@ const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 0.0001;
 const GRID_SIZE = 30;
 const TOKEN_SPAWN_PROBABILITY = 0.15;
+const PLAYER_RANGE_METERS = 35;
 
 // Create the map
 const map = leaflet.map(mapDiv, {
@@ -60,9 +80,47 @@ const playerMarker = leaflet.marker(CLASSROOM_COORDINATES);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
+// Player range
+const playerRangeCircle = leaflet.circle(CLASSROOM_COORDINATES, {
+  radius: PLAYER_RANGE_METERS,
+  color: "green",
+  fillColor: "#green",
+  fillOpacity: 0.2,
+});
+playerRangeCircle.addTo(map);
+
+// Player Inventory Logic
+let inventory: number | null = null;
+
+function updateInventoryUI() {
+  if (inventory === null) {
+    // hide token visual when inventory is empty
+    inventoryToken.textContent = "";
+    inventoryToken.classList.add("inventory-empty-token");
+  } else {
+    inventoryToken.textContent = String(inventory);
+    inventoryToken.classList.remove("inventory-empty-token");
+  }
+}
+
+updateInventoryUI();
+
+// Cell data structure
+interface Cell {
+  hasToken: boolean;
+  tokenValue: number | null;
+  rect: leaflet.Rectangle;
+  tokenMarker?: leaflet.Marker | undefined;
+}
+
+// Data representation of the grid
+const grid: Record<string, Cell> = {};
+
 // Function to create and add a rectangle for a cell at grid position (i, j)
-function createCell(i: number, j: number, token: boolean) {
+function createCell(i: number, j: number, hasToken: boolean) {
+  const key = `${i},${j}`;
   const origin = CLASSROOM_COORDINATES;
+
   const cellBounds = leaflet.latLngBounds(
     [
       origin.lat + i * TILE_DEGREES,
@@ -77,8 +135,9 @@ function createCell(i: number, j: number, token: boolean) {
   const rect = leaflet.rectangle(cellBounds);
   rect.addTo(map);
 
-  if (token) {
-    // Add visible token in the center of the cell
+  let tokenMarker: leaflet.Marker | undefined = undefined;
+  if (hasToken) {
+    // Add visible token marker in the center of the cell
     const center = leaflet.latLng(
       origin.lat + (i + 0.5) * TILE_DEGREES,
       origin.lng + (j + 0.5) * TILE_DEGREES,
@@ -91,16 +150,52 @@ function createCell(i: number, j: number, token: boolean) {
       iconAnchor: [14, 14],
     });
 
-    const tokenMarker = leaflet.marker(center, {
+    tokenMarker = leaflet.marker(center, {
       icon: tokenIcon,
       interactive: false,
     });
 
     tokenMarker.addTo(map);
-    rect.bindPopup("You found a token of value 2!");
-  } else {
-    // No token in this cell
-    rect.bindPopup("Empty cell");
+  }
+
+  grid[key] = {
+    hasToken,
+    tokenValue: hasToken ? 2 : null,
+    rect,
+    tokenMarker,
+  };
+
+  rect.on("click", () => handleCellClick(i, j));
+}
+
+function handleCellClick(i: number, j: number) {
+  const key = `${i},${j}`;
+  const cell = grid[key];
+
+  const cellCenter = leaflet.latLng(
+    CLASSROOM_COORDINATES.lat + (i + 0.5) * TILE_DEGREES,
+    CLASSROOM_COORDINATES.lng + (j + 0.5) * TILE_DEGREES,
+  );
+  const distance = CLASSROOM_COORDINATES.distanceTo(cellCenter);
+
+  if (distance > PLAYER_RANGE_METERS) {
+    leaflet
+      .popup()
+      .setLatLng(cellCenter)
+      .setContent("Too far away!")
+      .openOn(map);
+    return;
+  }
+
+  if (cell.hasToken && cell.tokenValue !== null && inventory === null) {
+    inventory = cell.tokenValue;
+    updateInventoryUI();
+    cell.hasToken = false;
+    cell.tokenValue = null;
+    if (cell.tokenMarker) {
+      map.removeLayer(cell.tokenMarker);
+      cell.tokenMarker = undefined;
+    }
   }
 }
 
