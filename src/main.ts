@@ -9,7 +9,7 @@ import "./style.css";
 import "./_leafletWorkaround.ts";
 
 // Import luck function
-//import luck from "./_luck.ts";
+import luck from "./_luck.ts";
 
 // Basic UI elements
 const controlPanelDiv = document.createElement("div");
@@ -34,6 +34,7 @@ const CLASSROOM_COORDINATES = leaflet.latLng(
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 0.0001;
 const GRID_SIZE = 30;
+const TOKEN_SPAWN_PROBABILITY = 0.15;
 
 // Create the map
 const map = leaflet.map(mapDiv, {
@@ -60,7 +61,7 @@ playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
 // Function to create and add a rectangle for a cell at grid position (i, j)
-function createCell(i: number, j: number) {
+function createCell(i: number, j: number, token: boolean) {
   const origin = CLASSROOM_COORDINATES;
   const cellBounds = leaflet.latLngBounds(
     [
@@ -75,11 +76,41 @@ function createCell(i: number, j: number) {
 
   const rect = leaflet.rectangle(cellBounds);
   rect.addTo(map);
+
+  if (token) {
+    // Add visible token in the center of the cell
+    const center = leaflet.latLng(
+      origin.lat + (i + 0.5) * TILE_DEGREES,
+      origin.lng + (j + 0.5) * TILE_DEGREES,
+    );
+
+    const tokenIcon = leaflet.divIcon({
+      className: "token-icon",
+      html: `2`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
+    });
+
+    const tokenMarker = leaflet.marker(center, {
+      icon: tokenIcon,
+      interactive: false,
+    });
+
+    tokenMarker.addTo(map);
+    rect.bindPopup("You found a token of value 2!");
+  } else {
+    // No token in this cell
+    rect.bindPopup("Empty cell");
+  }
 }
 
 // Create a grid of cells around the classroom
 for (let i = -GRID_SIZE; i < GRID_SIZE; i++) {
   for (let j = -GRID_SIZE; j < GRID_SIZE; j++) {
-    createCell(i, j);
+    if (luck([i, j].toString()) < TOKEN_SPAWN_PROBABILITY) {
+      createCell(i, j, true);
+    } else {
+      createCell(i, j, false);
+    }
   }
 }
