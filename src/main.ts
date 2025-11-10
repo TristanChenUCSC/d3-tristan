@@ -187,14 +187,137 @@ function handleCellClick(i: number, j: number) {
     return;
   }
 
-  if (cell.hasToken && cell.tokenValue !== null && inventory === null) {
-    inventory = cell.tokenValue;
-    updateInventoryUI();
-    cell.hasToken = false;
-    cell.tokenValue = null;
-    if (cell.tokenMarker) {
-      map.removeLayer(cell.tokenMarker);
-      cell.tokenMarker = undefined;
+  // Logic for clicking on a cell with a token
+  if (cell.hasToken && cell.tokenValue !== null) {
+    // If inventory is empty, pick up the token. Use popup and button to confirm
+    if (inventory === null) {
+      const popupDiv = document.createElement("div");
+      const infoDiv = document.createElement("div");
+      infoDiv.textContent =
+        `You found a token with a value of ${cell.tokenValue}.`;
+      const pickUpButton = document.createElement("button");
+      pickUpButton.textContent = "Pick Up Token";
+
+      popupDiv.appendChild(infoDiv);
+      popupDiv.appendChild(pickUpButton);
+
+      pickUpButton.addEventListener("click", () => {
+        inventory = cell.tokenValue;
+        updateInventoryUI();
+        cell.hasToken = false;
+        cell.tokenValue = null;
+        if (cell.tokenMarker) {
+          map.removeLayer(cell.tokenMarker);
+          cell.tokenMarker = undefined;
+        }
+        map.closePopup();
+      });
+
+      leaflet
+        .popup()
+        .setLatLng(cellCenter)
+        .setContent(popupDiv)
+        .openOn(map);
+      return;
+    } // If inventory has a token of the same value, craft them together
+    else if (cell.tokenValue === inventory) {
+      const popupDiv = document.createElement("div");
+      const infoDiv = document.createElement("div");
+      infoDiv.textContent =
+        `This token has the same value as your token (${inventory}).`;
+      const craftButton = document.createElement("button");
+      craftButton.textContent = "Craft them together";
+
+      popupDiv.appendChild(infoDiv);
+      popupDiv.appendChild(craftButton);
+
+      craftButton.addEventListener("click", () => {
+        cell.tokenValue! += inventory!;
+        inventory = null;
+        updateInventoryUI();
+        if (cell.tokenMarker) {
+          map.removeLayer(cell.tokenMarker);
+        }
+        const tokenIcon = leaflet.divIcon({
+          className: "token-icon",
+          html: `${cell.tokenValue}`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+
+        cell.tokenMarker = leaflet.marker(cellCenter, {
+          icon: tokenIcon,
+          interactive: false,
+        });
+        cell.tokenMarker.addTo(map);
+        map.closePopup();
+      });
+
+      leaflet
+        .popup()
+        .setLatLng(cellCenter)
+        .setContent(popupDiv)
+        .openOn(map);
+      return;
+    } // If inventory has a different token, do nothing
+    else {
+      leaflet
+        .popup()
+        .setLatLng(cellCenter)
+        .setContent("Cannot be crafted with your token.")
+        .openOn(map);
+      return;
+    }
+  } // Logic for clicking an empty cell
+  else {
+    // If inventory is empty, show empty message
+    if (inventory === null) {
+      leaflet
+        .popup()
+        .setLatLng(cellCenter)
+        .setContent("This is an empty Cell.")
+        .openOn(map);
+      return;
+    } else {
+      // Allow player to place token from inventory into the cell
+      const popupDiv = document.createElement("div");
+      const infoDiv = document.createElement("div");
+      infoDiv.textContent = "You have a token. Place token here?";
+      const placeButton = document.createElement("button");
+      placeButton.textContent = "Place Token";
+
+      popupDiv.appendChild(infoDiv);
+      popupDiv.appendChild(placeButton);
+
+      placeButton.addEventListener("click", () => {
+        cell.hasToken = true;
+        cell.tokenValue = inventory;
+        inventory = null;
+        updateInventoryUI();
+
+        // Add token marker to the cell
+        const tokenIcon = leaflet.divIcon({
+          className: "token-icon",
+          html: `${cell.tokenValue}`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+
+        cell.tokenMarker = leaflet.marker(cellCenter, {
+          icon: tokenIcon,
+          interactive: false,
+        });
+        cell.tokenMarker.addTo(map);
+
+        map.closePopup();
+      });
+
+      leaflet
+        .popup()
+        .setLatLng(cellCenter)
+        .setContent(popupDiv)
+        .openOn(map);
+      return;
     }
   }
 }

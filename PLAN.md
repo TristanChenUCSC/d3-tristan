@@ -31,5 +31,5 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] implement player range for interacting with cells
 - [x] implement token pick-up system that removes the token from the cell
 - [x] make a player inventory
-- [ ] implement crafting system
+- [x] implement crafting system
 - [ ] clean up and refactor code before finishing D3.a
