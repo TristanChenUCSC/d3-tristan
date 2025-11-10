@@ -9,6 +9,7 @@ import "./style.css";
 import "./_leafletWorkaround.ts";
 
 // Import luck function
+//import luck from "./_luck.ts";
 
 // Basic UI elements
 const controlPanelDiv = document.createElement("div");
@@ -31,6 +32,8 @@ const CLASSROOM_COORDINATES = leaflet.latLng(
 
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
+const TILE_DEGREES = 0.0001;
+const GRID_SIZE = 30;
 
 // Create the map
 const map = leaflet.map(mapDiv, {
@@ -55,3 +58,28 @@ leaflet
 const playerMarker = leaflet.marker(CLASSROOM_COORDINATES);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
+
+// Function to create and add a rectangle for a cell at grid position (i, j)
+function createCell(i: number, j: number) {
+  const origin = CLASSROOM_COORDINATES;
+  const cellBounds = leaflet.latLngBounds(
+    [
+      origin.lat + i * TILE_DEGREES,
+      origin.lng + j * TILE_DEGREES,
+    ],
+    [
+      origin.lat + (i + 1) * TILE_DEGREES,
+      origin.lng + (j + 1) * TILE_DEGREES,
+    ],
+  );
+
+  const rect = leaflet.rectangle(cellBounds);
+  rect.addTo(map);
+}
+
+// Create a grid of cells around the classroom
+for (let i = -GRID_SIZE; i < GRID_SIZE; i++) {
+  for (let j = -GRID_SIZE; j < GRID_SIZE; j++) {
+    createCell(i, j);
+  }
+}
