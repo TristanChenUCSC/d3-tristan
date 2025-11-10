@@ -11,6 +11,31 @@ import "./_leafletWorkaround.ts";
 // Import luck function
 import luck from "./_luck.ts";
 
+// === Type Definitions ===
+interface Cell {
+  hasToken: boolean;
+  tokenValue: number | null;
+  rect: leaflet.Rectangle;
+  tokenMarker?: leaflet.Marker | undefined;
+}
+
+// === Game State ===
+
+// Location of Classroom
+const CLASSROOM_COORDINATES = leaflet.latLng(
+  36.997936938057016,
+  -122.05703507501151,
+);
+
+// Tunable gameplay parameters
+const GAMEPLAY_ZOOM_LEVEL = 19;
+const TILE_DEGREES = 0.0001;
+const GRID_SIZE = 30;
+const TOKEN_SPAWN_PROBABILITY = 0.15;
+const PLAYER_RANGE_METERS = 35;
+
+// === DOM Initialization ===
+
 // Basic UI elements
 const controlPanelDiv = document.createElement("div");
 controlPanelDiv.id = "controlPanel";
@@ -43,18 +68,7 @@ inventoryDiv.appendChild(inventoryTitle);
 inventoryDiv.appendChild(inventorySlot);
 statusPanelDiv.appendChild(inventoryDiv);
 
-// Location of Classroom
-const CLASSROOM_COORDINATES = leaflet.latLng(
-  36.997936938057016,
-  -122.05703507501151,
-);
-
-// Tunable gameplay parameters
-const GAMEPLAY_ZOOM_LEVEL = 19;
-const TILE_DEGREES = 0.0001;
-const GRID_SIZE = 30;
-const TOKEN_SPAWN_PROBABILITY = 0.15;
-const PLAYER_RANGE_METERS = 35;
+// === Map Initialization ===
 
 // Create the map
 const map = leaflet.map(mapDiv, {
@@ -89,8 +103,7 @@ const playerRangeCircle = leaflet.circle(CLASSROOM_COORDINATES, {
 });
 playerRangeCircle.addTo(map);
 
-// Player Inventory Logic
-let inventory: number | null = null;
+// === Utility functions ===
 
 function updateInventoryUI() {
   if (inventory === null) {
@@ -103,20 +116,128 @@ function updateInventoryUI() {
   }
 }
 
-updateInventoryUI();
-
-// Cell data structure
-interface Cell {
-  hasToken: boolean;
-  tokenValue: number | null;
-  rect: leaflet.Rectangle;
-  tokenMarker?: leaflet.Marker | undefined;
+function getCellCenter(i: number, j: number): leaflet.LatLng {
+  return leaflet.latLng(
+    CLASSROOM_COORDINATES.lat + (i + 0.5) * TILE_DEGREES,
+    CLASSROOM_COORDINATES.lng + (j + 0.5) * TILE_DEGREES,
+  );
 }
+
+function getDistanceFromPlayer(i: number, j: number): number {
+  return CLASSROOM_COORDINATES.distanceTo(getCellCenter(i, j));
+}
+
+function createTokenMarker(
+  value: number,
+  center: leaflet.LatLng,
+  map: leaflet.Map,
+): leaflet.Marker {
+  const tokenIcon = leaflet.divIcon({
+    className: "token-icon",
+    html: `${value}`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+  });
+
+  const tokenMarker = leaflet.marker(center, {
+    icon: tokenIcon,
+    interactive: false,
+  });
+
+  tokenMarker.addTo(map);
+  return tokenMarker;
+}
+
+function createPopup(
+  latLng: leaflet.LatLng,
+  message: string,
+  buttonText?: string,
+  onClick?: () => void,
+) {
+  const popupDiv = document.createElement("div");
+  const infoDiv = document.createElement("div");
+  infoDiv.textContent = message;
+  popupDiv.appendChild(infoDiv);
+
+  if (buttonText && onClick) {
+    const button = document.createElement("button");
+    button.textContent = buttonText;
+    button.addEventListener("click", onClick);
+    popupDiv.appendChild(button);
+  }
+
+  leaflet
+    .popup()
+    .setLatLng(latLng)
+    .setContent(popupDiv)
+    .openOn(map);
+}
+
+// === Functions for core game actions ===
+
+function pickUpToken(cellCenter: leaflet.LatLng, cell: Cell) {
+  createPopup(
+    cellCenter,
+    `You found a token with a value of ${cell.tokenValue}.`,
+    "Pick Up Token",
+    () => {
+      inventory = cell.tokenValue;
+      updateInventoryUI();
+      cell.hasToken = false;
+      cell.tokenValue = null;
+      if (cell.tokenMarker) {
+        map.removeLayer(cell.tokenMarker);
+        cell.tokenMarker = undefined;
+      }
+      map.closePopup();
+    },
+  );
+}
+
+function craftToken(cellCenter: leaflet.LatLng, cell: Cell) {
+  createPopup(
+    cellCenter,
+    `This token has the same value as your token (${inventory}).`,
+    "Craft them together",
+    () => {
+      cell.tokenValue! += inventory!;
+      inventory = null;
+      updateInventoryUI();
+      if (cell.tokenMarker) {
+        map.removeLayer(cell.tokenMarker);
+      }
+      cell.tokenMarker = createTokenMarker(cell.tokenValue!, cellCenter, map);
+      map.closePopup();
+    },
+  );
+}
+
+function placeToken(cellCenter: leaflet.LatLng, cell: Cell) {
+  createPopup(
+    cellCenter,
+    "You have a token. Place token here?",
+    "Place Token",
+    () => {
+      cell.hasToken = true;
+      cell.tokenValue = inventory;
+      inventory = null;
+      updateInventoryUI();
+      cell.tokenMarker = createTokenMarker(cell.tokenValue!, cellCenter, map);
+      map.closePopup();
+    },
+  );
+}
+
+// === Main Game Logic ===
+
+// Player Inventory
+let inventory: number | null = null;
+updateInventoryUI();
 
 // Data representation of the grid
 const grid: Record<string, Cell> = {};
 
-// Function to create and add a rectangle for a cell at grid position (i, j)
+// Function to create a cell
 function createCell(i: number, j: number, hasToken: boolean) {
   const key = `${i},${j}`;
   const origin = CLASSROOM_COORDINATES;
@@ -138,24 +259,9 @@ function createCell(i: number, j: number, hasToken: boolean) {
   let tokenMarker: leaflet.Marker | undefined = undefined;
   if (hasToken) {
     // Add visible token marker in the center of the cell
-    const center = leaflet.latLng(
-      origin.lat + (i + 0.5) * TILE_DEGREES,
-      origin.lng + (j + 0.5) * TILE_DEGREES,
-    );
+    const center = getCellCenter(i, j);
 
-    const tokenIcon = leaflet.divIcon({
-      className: "token-icon",
-      html: `2`,
-      iconSize: [28, 28],
-      iconAnchor: [14, 14],
-    });
-
-    tokenMarker = leaflet.marker(center, {
-      icon: tokenIcon,
-      interactive: false,
-    });
-
-    tokenMarker.addTo(map);
+    tokenMarker = createTokenMarker(2, center, map);
   }
 
   grid[key] = {
@@ -168,161 +274,57 @@ function createCell(i: number, j: number, hasToken: boolean) {
   rect.on("click", () => handleCellClick(i, j));
 }
 
+// Function to handle cell clicks
 function handleCellClick(i: number, j: number) {
   const key = `${i},${j}`;
   const cell = grid[key];
-
-  const cellCenter = leaflet.latLng(
-    CLASSROOM_COORDINATES.lat + (i + 0.5) * TILE_DEGREES,
-    CLASSROOM_COORDINATES.lng + (j + 0.5) * TILE_DEGREES,
-  );
-  const distance = CLASSROOM_COORDINATES.distanceTo(cellCenter);
+  const cellCenter = getCellCenter(i, j);
+  const distance = getDistanceFromPlayer(i, j);
 
   if (distance > PLAYER_RANGE_METERS) {
-    leaflet
-      .popup()
-      .setLatLng(cellCenter)
-      .setContent("Too far away!")
-      .openOn(map);
+    createPopup(
+      cellCenter,
+      "Too far away!",
+    );
     return;
   }
 
-  // Logic for clicking on a cell with a token
+  // If clicked cell has a token
   if (cell.hasToken && cell.tokenValue !== null) {
     // If inventory is empty, pick up the token. Use popup and button to confirm
     if (inventory === null) {
-      const popupDiv = document.createElement("div");
-      const infoDiv = document.createElement("div");
-      infoDiv.textContent =
-        `You found a token with a value of ${cell.tokenValue}.`;
-      const pickUpButton = document.createElement("button");
-      pickUpButton.textContent = "Pick Up Token";
-
-      popupDiv.appendChild(infoDiv);
-      popupDiv.appendChild(pickUpButton);
-
-      pickUpButton.addEventListener("click", () => {
-        inventory = cell.tokenValue;
-        updateInventoryUI();
-        cell.hasToken = false;
-        cell.tokenValue = null;
-        if (cell.tokenMarker) {
-          map.removeLayer(cell.tokenMarker);
-          cell.tokenMarker = undefined;
-        }
-        map.closePopup();
-      });
-
-      leaflet
-        .popup()
-        .setLatLng(cellCenter)
-        .setContent(popupDiv)
-        .openOn(map);
+      pickUpToken(cellCenter, cell);
       return;
     } // If inventory has a token of the same value, craft them together
     else if (cell.tokenValue === inventory) {
-      const popupDiv = document.createElement("div");
-      const infoDiv = document.createElement("div");
-      infoDiv.textContent =
-        `This token has the same value as your token (${inventory}).`;
-      const craftButton = document.createElement("button");
-      craftButton.textContent = "Craft them together";
-
-      popupDiv.appendChild(infoDiv);
-      popupDiv.appendChild(craftButton);
-
-      craftButton.addEventListener("click", () => {
-        cell.tokenValue! += inventory!;
-        inventory = null;
-        updateInventoryUI();
-        if (cell.tokenMarker) {
-          map.removeLayer(cell.tokenMarker);
-        }
-        const tokenIcon = leaflet.divIcon({
-          className: "token-icon",
-          html: `${cell.tokenValue}`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
-        });
-
-        cell.tokenMarker = leaflet.marker(cellCenter, {
-          icon: tokenIcon,
-          interactive: false,
-        });
-        cell.tokenMarker.addTo(map);
-        map.closePopup();
-      });
-
-      leaflet
-        .popup()
-        .setLatLng(cellCenter)
-        .setContent(popupDiv)
-        .openOn(map);
+      craftToken(cellCenter, cell);
       return;
     } // If inventory has a different token, do nothing
     else {
-      leaflet
-        .popup()
-        .setLatLng(cellCenter)
-        .setContent("Cannot be crafted with your token.")
-        .openOn(map);
+      createPopup(
+        cellCenter,
+        "Cannot be crafted with your token.",
+      );
       return;
     }
-  } // Logic for clicking an empty cell
+  } // Else apply logic for clicking an empty cell
   else {
-    // If inventory is empty, show empty message
+    // If inventory is empty, show message that cell is empty
     if (inventory === null) {
-      leaflet
-        .popup()
-        .setLatLng(cellCenter)
-        .setContent("This is an empty Cell.")
-        .openOn(map);
+      createPopup(
+        cellCenter,
+        "This is an empty Cell.",
+      );
       return;
     } else {
       // Allow player to place token from inventory into the cell
-      const popupDiv = document.createElement("div");
-      const infoDiv = document.createElement("div");
-      infoDiv.textContent = "You have a token. Place token here?";
-      const placeButton = document.createElement("button");
-      placeButton.textContent = "Place Token";
-
-      popupDiv.appendChild(infoDiv);
-      popupDiv.appendChild(placeButton);
-
-      placeButton.addEventListener("click", () => {
-        cell.hasToken = true;
-        cell.tokenValue = inventory;
-        inventory = null;
-        updateInventoryUI();
-
-        // Add token marker to the cell
-        const tokenIcon = leaflet.divIcon({
-          className: "token-icon",
-          html: `${cell.tokenValue}`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
-        });
-
-        cell.tokenMarker = leaflet.marker(cellCenter, {
-          icon: tokenIcon,
-          interactive: false,
-        });
-        cell.tokenMarker.addTo(map);
-
-        map.closePopup();
-      });
-
-      leaflet
-        .popup()
-        .setLatLng(cellCenter)
-        .setContent(popupDiv)
-        .openOn(map);
+      placeToken(cellCenter, cell);
       return;
     }
   }
 }
 
-// Create a grid of cells around the classroom
+// Generate the grid of cells
 for (let i = -GRID_SIZE; i < GRID_SIZE; i++) {
   for (let j = -GRID_SIZE; j < GRID_SIZE; j++) {
     if (luck([i, j].toString()) < TOKEN_SPAWN_PROBABILITY) {

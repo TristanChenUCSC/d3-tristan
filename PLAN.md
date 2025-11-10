@@ -32,4 +32,4 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] implement token pick-up system that removes the token from the cell
 - [x] make a player inventory
 - [x] implement crafting system
-- [ ] clean up and refactor code before finishing D3.a
+- [x] clean up and refactor code before finishing D3.a
