@@ -28,3 +28,8 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] add visible content to cells
 - [x] make cells clickable
 - [x] implement randomized token spawning using luck function
+- [ ] implement player range for interacting with cells
+- [ ] implement token pick-up system that removes the token from the cell
+- [ ] make a player inventory
+- [ ] implement crafting system
+- [ ] clean up and refactor code before finishing D3.a
