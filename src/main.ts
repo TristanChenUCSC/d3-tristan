@@ -89,19 +89,80 @@ leaflet
   })
   .addTo(map);
 
-// Add a marker to represent the player
-const playerMarker = leaflet.marker(CLASSROOM_COORDINATES);
+// Player position and movable marker
+let playerPosition = leaflet.latLng(
+  CLASSROOM_COORDINATES.lat,
+  CLASSROOM_COORDINATES.lng,
+);
+const playerMarker = leaflet.marker(playerPosition);
 playerMarker.bindTooltip("That's you!");
 playerMarker.addTo(map);
 
-// Player range
-const playerRangeCircle = leaflet.circle(CLASSROOM_COORDINATES, {
+// Player range (follows playerPosition)
+const playerRangeCircle = leaflet.circle(playerPosition, {
   radius: PLAYER_RANGE_METERS,
   color: "green",
-  fillColor: "#green",
+  fillColor: "green",
   fillOpacity: 0.2,
 });
 playerRangeCircle.addTo(map);
+
+// === Gamepad UI ===
+// Create a simple 4-button D-pad to simulate movement
+const gamepad = document.createElement("div");
+gamepad.id = "gamepad";
+
+function makeButton(label: string) {
+  const b = document.createElement("button");
+  b.className = "gamepad-button";
+  b.textContent = label;
+  return b;
+}
+
+const upButton = makeButton("Go North");
+const leftButton = makeButton("Go West");
+const rightButton = makeButton("Go East");
+const downButton = makeButton("Go South");
+
+const row1 = document.createElement("div");
+row1.className = "gamepad-row";
+row1.appendChild(upButton);
+
+const row2 = document.createElement("div");
+row2.className = "gamepad-row";
+row2.appendChild(leftButton);
+const spacer = document.createElement("div");
+spacer.className = "gamepad-spacer";
+row2.appendChild(spacer);
+row2.appendChild(rightButton);
+
+const row3 = document.createElement("div");
+row3.className = "gamepad-row";
+row3.appendChild(downButton);
+
+gamepad.appendChild(row1);
+gamepad.appendChild(row2);
+gamepad.appendChild(row3);
+// Place the gamepad in the status panel (below the map) and to the right of the inventory
+statusPanelDiv.appendChild(gamepad);
+
+// Movement helper: move by TILE_DEGREES for lat/lng
+function movePlayer(dLat: number, dLng: number) {
+  playerPosition = leaflet.latLng(
+    playerPosition.lat + dLat,
+    playerPosition.lng + dLng,
+  );
+  playerMarker.setLatLng(playerPosition);
+  playerRangeCircle.setLatLng(playerPosition);
+  // Optionally pan the map to keep player in view
+  map.panTo(playerPosition);
+}
+
+// Wire up buttons
+upButton.addEventListener("click", () => movePlayer(TILE_DEGREES, 0));
+downButton.addEventListener("click", () => movePlayer(-TILE_DEGREES, 0));
+leftButton.addEventListener("click", () => movePlayer(0, -TILE_DEGREES));
+rightButton.addEventListener("click", () => movePlayer(0, TILE_DEGREES));
 
 // === Utility functions ===
 
@@ -124,7 +185,8 @@ function getCellCenter(i: number, j: number): leaflet.LatLng {
 }
 
 function getDistanceFromPlayer(i: number, j: number): number {
-  return CLASSROOM_COORDINATES.distanceTo(getCellCenter(i, j));
+  // distance from the current player position (may move with gamepad)
+  return playerPosition.distanceTo(getCellCenter(i, j));
 }
 
 function createTokenMarker(

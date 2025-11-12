@@ -41,8 +41,8 @@ Key gameplay challenge: Can players craft an even higher value token by moving t
 
 ### Steps
 
-- [ ] create buttons for player movement in the UI
-- [ ] implement logic for player movement
+- [x] create buttons for player movement in the UI
+- [x] implement logic for player movement
 - [ ] implement globe-spanning grid that generates and removes cells as player moves/scrolls
 - [ ] anchor the grid at Null Island
 - [ ] clean up and refactor code before finishing D3.b

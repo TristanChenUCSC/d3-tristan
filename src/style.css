@@ -61,3 +61,52 @@
 .inventory-empty-token {
   visibility: hidden;
 }
+
+/* Status panel layout: inventory on left, gamepad on right */
+#statusPanel {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+}
+
+/* Gamepad styles */
+#gamepad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0.25rem;
+}
+
+.gamepad-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.gamepad-spacer {
+  width: 48px;
+  height: 1px;
+}
+
+.gamepad-button {
+  min-width: 84px;
+  height: 36px;
+  background: #f2f2f2;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.gamepad-button:active {
+  transform: translateY(1px);
+}
