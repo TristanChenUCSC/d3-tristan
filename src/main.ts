@@ -29,6 +29,10 @@ const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 0.0001;
 const TOKEN_SPAWN_PROBABILITY = 0.15;
 const PLAYER_RANGE_METERS = 35;
+const VICTORY_THRESHOLD = 32;
+
+// Victory state
+let victoryState = false;
 
 // === DOM Initialization ===
 
@@ -265,6 +269,13 @@ function craftToken(cellCenter: leaflet.LatLng, cell: Cell) {
     "Craft them together",
     () => {
       cell.tokenValue! += inventory!;
+      if (cell.tokenValue! >= VICTORY_THRESHOLD && !victoryState) {
+        // Player wins the game
+        alert(
+          "Congratulations! You've crafted a token of value 32 or more and won the game!",
+        );
+        victoryState = true;
+      }
       inventory = null;
       updateInventoryUI();
       if (cell.tokenMarker) {
