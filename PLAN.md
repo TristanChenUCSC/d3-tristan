@@ -33,3 +33,16 @@ Key gameplay challenge: Can players collect and craft tokens from nearby locatio
 - [x] make a player inventory
 - [x] implement crafting system
 - [x] clean up and refactor code before finishing D3.a
+
+## D3.b: Globe-spanning gameplay
+
+Key technical challenge: Can you set up your implementation to support gameplay anywhere in the real world, not just locations near our classroom?
+Key gameplay challenge: Can players craft an even higher value token by moving to other locations to get access to additional crafting materials?
+
+### Steps
+
+- [ ] create buttons for player movement in the UI
+- [ ] implement logic for player movement
+- [ ] implement globe-spanning grid that generates and removes cells as player moves/scrolls
+- [ ] anchor the grid at Null Island
+- [ ] clean up and refactor code before finishing D3.b
