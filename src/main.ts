@@ -12,6 +12,7 @@ import "./_leafletWorkaround.ts";
 import luck from "./_luck.ts";
 
 // === Type Definitions ===
+
 interface Cell {
   hasToken: boolean;
   tokenValue: number | null;
@@ -28,6 +29,7 @@ const ORIGIN_COORDINATES = leaflet.latLng(0, 0);
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 0.0001;
 const TOKEN_SPAWN_PROBABILITY = 0.15;
+const DEFAULT_TOKEN_VALUE = 2;
 const PLAYER_RANGE_METERS = 35;
 const VICTORY_THRESHOLD = 32;
 
@@ -68,6 +70,44 @@ inventoryDiv.appendChild(inventoryTitle);
 inventoryDiv.appendChild(inventorySlot);
 statusPanelDiv.appendChild(inventoryDiv);
 
+// Gamepad UI
+const gamepad = document.createElement("div");
+gamepad.id = "gamepad";
+
+function makeButton(label: string) {
+  const b = document.createElement("button");
+  b.className = "gamepad-button";
+  b.textContent = label;
+  return b;
+}
+
+const upButton = makeButton("Go North");
+const leftButton = makeButton("Go West");
+const rightButton = makeButton("Go East");
+const downButton = makeButton("Go South");
+
+const row1 = document.createElement("div");
+row1.className = "gamepad-row";
+row1.appendChild(upButton);
+
+const row2 = document.createElement("div");
+row2.className = "gamepad-row";
+row2.appendChild(leftButton);
+const spacer = document.createElement("div");
+spacer.className = "gamepad-spacer";
+row2.appendChild(spacer);
+row2.appendChild(rightButton);
+
+const row3 = document.createElement("div");
+row3.className = "gamepad-row";
+row3.appendChild(downButton);
+
+gamepad.appendChild(row1);
+gamepad.appendChild(row2);
+gamepad.appendChild(row3);
+
+statusPanelDiv.appendChild(gamepad);
+
 // === Map Initialization ===
 
 // Create the map
@@ -107,63 +147,6 @@ const playerRangeCircle = leaflet.circle(playerPosition, {
 });
 playerRangeCircle.addTo(map);
 
-// === Gamepad UI ===
-// Create a simple 4-button D-pad to simulate movement
-const gamepad = document.createElement("div");
-gamepad.id = "gamepad";
-
-function makeButton(label: string) {
-  const b = document.createElement("button");
-  b.className = "gamepad-button";
-  b.textContent = label;
-  return b;
-}
-
-const upButton = makeButton("Go North");
-const leftButton = makeButton("Go West");
-const rightButton = makeButton("Go East");
-const downButton = makeButton("Go South");
-
-const row1 = document.createElement("div");
-row1.className = "gamepad-row";
-row1.appendChild(upButton);
-
-const row2 = document.createElement("div");
-row2.className = "gamepad-row";
-row2.appendChild(leftButton);
-const spacer = document.createElement("div");
-spacer.className = "gamepad-spacer";
-row2.appendChild(spacer);
-row2.appendChild(rightButton);
-
-const row3 = document.createElement("div");
-row3.className = "gamepad-row";
-row3.appendChild(downButton);
-
-gamepad.appendChild(row1);
-gamepad.appendChild(row2);
-gamepad.appendChild(row3);
-// Place the gamepad in the status panel (below the map) and to the right of the inventory
-statusPanelDiv.appendChild(gamepad);
-
-// Movement helper: move by TILE_DEGREES for lat/lng
-function movePlayer(dLat: number, dLng: number) {
-  playerPosition = leaflet.latLng(
-    playerPosition.lat + dLat,
-    playerPosition.lng + dLng,
-  );
-  playerMarker.setLatLng(playerPosition);
-  playerRangeCircle.setLatLng(playerPosition);
-  // Optionally pan the map to keep player in view
-  map.panTo(playerPosition);
-}
-
-// Wire up buttons
-upButton.addEventListener("click", () => movePlayer(TILE_DEGREES, 0));
-downButton.addEventListener("click", () => movePlayer(-TILE_DEGREES, 0));
-leftButton.addEventListener("click", () => movePlayer(0, -TILE_DEGREES));
-rightButton.addEventListener("click", () => movePlayer(0, TILE_DEGREES));
-
 // === Utility functions ===
 
 function updateInventoryUI() {
@@ -175,6 +158,17 @@ function updateInventoryUI() {
     inventoryToken.textContent = String(inventory);
     inventoryToken.classList.remove("inventory-empty-token");
   }
+}
+
+function movePlayer(dLat: number, dLng: number) {
+  playerPosition = leaflet.latLng(
+    playerPosition.lat + dLat,
+    playerPosition.lng + dLng,
+  );
+  playerMarker.setLatLng(playerPosition);
+  playerRangeCircle.setLatLng(playerPosition);
+  // Optionally pan the map to keep player in view
+  map.panTo(playerPosition);
 }
 
 function getCellCenter(i: number, j: number): leaflet.LatLng {
@@ -272,7 +266,7 @@ function craftToken(cellCenter: leaflet.LatLng, cell: Cell) {
       if (cell.tokenValue! >= VICTORY_THRESHOLD && !victoryState) {
         // Player wins the game
         alert(
-          "Congratulations! You've crafted a token of value 32 or more and won the game!",
+          `Congratulations! You've crafted a token of value ${VICTORY_THRESHOLD} or more and won the game!`,
         );
         victoryState = true;
       }
@@ -336,12 +330,12 @@ function createCell(i: number, j: number, hasToken: boolean) {
     // Add visible token marker in the center of the cell
     const center = getCellCenter(i, j);
 
-    tokenMarker = createTokenMarker(2, center, map);
+    tokenMarker = createTokenMarker(DEFAULT_TOKEN_VALUE, center, map);
   }
 
   grid[key] = {
     hasToken,
-    tokenValue: hasToken ? 2 : null,
+    tokenValue: hasToken ? DEFAULT_TOKEN_VALUE : null,
     rect,
     tokenMarker,
   };
@@ -399,6 +393,7 @@ function handleCellClick(i: number, j: number) {
   }
 }
 
+// Function to update visible cells based on map bounds
 function updateVisibleCells(bounds: leaflet.LatLngBounds) {
   const north = bounds.getNorth();
   const south = bounds.getSouth();
@@ -447,7 +442,15 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
 const initialBounds = map.getBounds();
 updateVisibleCells(initialBounds);
 
-// Redraw grid after moving the map
+// === Event Listeners ===
+
+// Button logic for moving the player 1 tile in each direction
+upButton.addEventListener("click", () => movePlayer(TILE_DEGREES, 0));
+downButton.addEventListener("click", () => movePlayer(-TILE_DEGREES, 0));
+leftButton.addEventListener("click", () => movePlayer(0, -TILE_DEGREES));
+rightButton.addEventListener("click", () => movePlayer(0, TILE_DEGREES));
+
+// Redraw grid if the map is moved
 map.on("moveend", () => {
   const bounds = map.getBounds();
   updateVisibleCells(bounds);
