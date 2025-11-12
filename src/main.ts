@@ -15,22 +15,18 @@ import luck from "./_luck.ts";
 interface Cell {
   hasToken: boolean;
   tokenValue: number | null;
-  rect: leaflet.Rectangle;
+  rect?: leaflet.Rectangle | undefined;
   tokenMarker?: leaflet.Marker | undefined;
 }
 
 // === Game State ===
 
-// Location of Classroom
-const CLASSROOM_COORDINATES = leaflet.latLng(
-  36.997936938057016,
-  -122.05703507501151,
-);
+// Location of Grid Origin
+const ORIGIN_COORDINATES = leaflet.latLng(0, 0);
 
 // Tunable gameplay parameters
 const GAMEPLAY_ZOOM_LEVEL = 19;
 const TILE_DEGREES = 0.0001;
-const GRID_SIZE = 30;
 const TOKEN_SPAWN_PROBABILITY = 0.15;
 const PLAYER_RANGE_METERS = 35;
 
@@ -72,7 +68,7 @@ statusPanelDiv.appendChild(inventoryDiv);
 
 // Create the map
 const map = leaflet.map(mapDiv, {
-  center: CLASSROOM_COORDINATES,
+  center: ORIGIN_COORDINATES,
   zoom: GAMEPLAY_ZOOM_LEVEL,
   minZoom: GAMEPLAY_ZOOM_LEVEL,
   maxZoom: GAMEPLAY_ZOOM_LEVEL,
@@ -91,8 +87,8 @@ leaflet
 
 // Player position and movable marker
 let playerPosition = leaflet.latLng(
-  CLASSROOM_COORDINATES.lat,
-  CLASSROOM_COORDINATES.lng,
+  ORIGIN_COORDINATES.lat,
+  ORIGIN_COORDINATES.lng,
 );
 const playerMarker = leaflet.marker(playerPosition);
 playerMarker.bindTooltip("That's you!");
@@ -179,14 +175,20 @@ function updateInventoryUI() {
 
 function getCellCenter(i: number, j: number): leaflet.LatLng {
   return leaflet.latLng(
-    CLASSROOM_COORDINATES.lat + (i + 0.5) * TILE_DEGREES,
-    CLASSROOM_COORDINATES.lng + (j + 0.5) * TILE_DEGREES,
+    ORIGIN_COORDINATES.lat + (i + 0.5) * TILE_DEGREES,
+    ORIGIN_COORDINATES.lng + (j + 0.5) * TILE_DEGREES,
   );
 }
 
 function getDistanceFromPlayer(i: number, j: number): number {
   // distance from the current player position (may move with gamepad)
   return playerPosition.distanceTo(getCellCenter(i, j));
+}
+
+function latLngToCellID(lat: number, lng: number): string {
+  const i = Math.floor(lat / TILE_DEGREES);
+  const j = Math.floor(lng / TILE_DEGREES);
+  return `${i},${j}`;
 }
 
 function createTokenMarker(
@@ -302,7 +304,7 @@ const grid: Record<string, Cell> = {};
 // Function to create a cell
 function createCell(i: number, j: number, hasToken: boolean) {
   const key = `${i},${j}`;
-  const origin = CLASSROOM_COORDINATES;
+  const origin = ORIGIN_COORDINATES;
 
   const cellBounds = leaflet.latLngBounds(
     [
@@ -386,13 +388,56 @@ function handleCellClick(i: number, j: number) {
   }
 }
 
-// Generate the grid of cells
-for (let i = -GRID_SIZE; i < GRID_SIZE; i++) {
-  for (let j = -GRID_SIZE; j < GRID_SIZE; j++) {
-    if (luck([i, j].toString()) < TOKEN_SPAWN_PROBABILITY) {
-      createCell(i, j, true);
-    } else {
-      createCell(i, j, false);
+function updateVisibleCells(bounds: leaflet.LatLngBounds) {
+  const north = bounds.getNorth();
+  const south = bounds.getSouth();
+  const east = bounds.getEast();
+  const west = bounds.getWest();
+
+  const bottomLeftCellID = latLngToCellID(south, west);
+  const topRightCellID = latLngToCellID(north, east);
+
+  const [iMin, jMin] = bottomLeftCellID.split(",").map(Number);
+  const [iMax, jMax] = topRightCellID.split(",").map(Number);
+
+  const visibleCells = new Set<string>();
+
+  for (let i = iMin; i <= iMax; i++) {
+    for (let j = jMin; j <= jMax; j++) {
+      const cellID = `${i},${j}`;
+      visibleCells.add(cellID);
+
+      if (!grid[cellID]) {
+        if (luck([i, j].toString()) < TOKEN_SPAWN_PROBABILITY) {
+          createCell(i, j, true);
+        } else {
+          createCell(i, j, false);
+        }
+      }
+    }
+  }
+
+  // Remove cells that are no longer visible
+  for (const cellID in grid) {
+    if (!visibleCells.has(cellID)) {
+      const cell = grid[cellID];
+      if (cell.rect) {
+        map.removeLayer(cell.rect);
+      }
+      if (cell.tokenMarker) {
+        map.removeLayer(cell.tokenMarker);
+      }
+      delete grid[cellID];
     }
   }
 }
+
+// Initial population of visible cells
+const initialBounds = map.getBounds();
+updateVisibleCells(initialBounds);
+
+// Redraw grid after moving the map
+map.on("moveend", () => {
+  const bounds = map.getBounds();
+  updateVisibleCells(bounds);
+});
