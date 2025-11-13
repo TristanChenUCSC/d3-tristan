@@ -47,3 +47,15 @@ Key gameplay challenge: Can players craft an even higher value token by moving t
 - [x] anchor the grid at Null Island
 - [x] create victory threshold
 - [x] clean up and refactor code before finishing D3.b
+
+## D3.c: Object persistence
+
+Key technical challenge: Can your software accurately remember the state of map cells even when they scroll off the screen?
+Key gameplay challenge: Can you fix a gameplay bug where players can farm tokens by moving into and out of a region repeatedly to get access to fresh resources?
+
+### Steps
+
+- [ ] apply flyweight pattern to limit how many cells are stored in memory
+- [ ] use memento pattern to preserve the state of modified cells
+- [ ] create cells that appear to keep their states even when they are off-screen
+- [ ] clean up and refactor code before finishing D3.c
