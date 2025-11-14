@@ -55,7 +55,7 @@ Key gameplay challenge: Can you fix a gameplay bug where players can farm tokens
 
 ### Steps
 
-- [ ] apply flyweight pattern to limit how many cells are stored in memory
+- [x] apply flyweight pattern to limit how many cells are stored in memory
 - [ ] use memento pattern to preserve the state of modified cells
 - [ ] create cells that appear to keep their states even when they are off-screen
 - [ ] clean up and refactor code before finishing D3.c

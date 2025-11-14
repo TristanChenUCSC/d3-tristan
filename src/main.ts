@@ -16,9 +16,11 @@ import luck from "./_luck.ts";
 interface Cell {
   hasToken: boolean;
   tokenValue: number | null;
-  rect?: leaflet.Rectangle | undefined;
-  tokenMarker?: leaflet.Marker | undefined;
 }
+
+const cellRects: Map<string, leaflet.Rectangle> = new Map();
+const cellTokenMarkers: Map<string, leaflet.Marker> = new Map();
+const modifiedCells: Map<string, Cell> = new Map();
 
 // === Game State ===
 
@@ -237,7 +239,7 @@ function createPopup(
 
 // === Functions for core game actions ===
 
-function pickUpToken(cellCenter: leaflet.LatLng, cell: Cell) {
+function pickUpToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
   createPopup(
     cellCenter,
     `You found a token with a value of ${cell.tokenValue}.`,
@@ -247,16 +249,18 @@ function pickUpToken(cellCenter: leaflet.LatLng, cell: Cell) {
       updateInventoryUI();
       cell.hasToken = false;
       cell.tokenValue = null;
-      if (cell.tokenMarker) {
-        map.removeLayer(cell.tokenMarker);
-        cell.tokenMarker = undefined;
+      if (cellTokenMarkers.has(cellID)) {
+        const marker = cellTokenMarkers.get(cellID);
+        map.removeLayer(marker!);
+        cellTokenMarkers.delete(cellID);
       }
+      modifiedCells.set(cellID, cell);
       map.closePopup();
     },
   );
 }
 
-function craftToken(cellCenter: leaflet.LatLng, cell: Cell) {
+function craftToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
   createPopup(
     cellCenter,
     `This token has the same value as your token (${inventory}).`,
@@ -272,16 +276,23 @@ function craftToken(cellCenter: leaflet.LatLng, cell: Cell) {
       }
       inventory = null;
       updateInventoryUI();
-      if (cell.tokenMarker) {
-        map.removeLayer(cell.tokenMarker);
+      if (cellTokenMarkers.has(cellID)) {
+        const marker = cellTokenMarkers.get(cellID);
+        map.removeLayer(marker!);
       }
-      cell.tokenMarker = createTokenMarker(cell.tokenValue!, cellCenter, map);
+      const newTokenMarker = createTokenMarker(
+        cell.tokenValue!,
+        cellCenter,
+        map,
+      );
+      cellTokenMarkers.set(cellID, newTokenMarker);
+      modifiedCells.set(cellID, cell);
       map.closePopup();
     },
   );
 }
 
-function placeToken(cellCenter: leaflet.LatLng, cell: Cell) {
+function placeToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
   createPopup(
     cellCenter,
     "You have a token. Place token here?",
@@ -291,7 +302,13 @@ function placeToken(cellCenter: leaflet.LatLng, cell: Cell) {
       cell.tokenValue = inventory;
       inventory = null;
       updateInventoryUI();
-      cell.tokenMarker = createTokenMarker(cell.tokenValue!, cellCenter, map);
+      const newTokenMarker = createTokenMarker(
+        cell.tokenValue!,
+        cellCenter,
+        map,
+      );
+      cellTokenMarkers.set(cellID, newTokenMarker);
+      modifiedCells.set(cellID, cell);
       map.closePopup();
     },
   );
@@ -303,11 +320,11 @@ function placeToken(cellCenter: leaflet.LatLng, cell: Cell) {
 let inventory: number | null = null;
 updateInventoryUI();
 
-// Data representation of the grid
-const grid: Record<string, Cell> = {};
+// Grid data structures for cell memory
+const grid: Map<string, Cell> = new Map();
 
 // Function to create a cell
-function createCell(i: number, j: number, hasToken: boolean) {
+function createCell(i: number, j: number, cell: Cell) {
   const key = `${i},${j}`;
   const origin = ORIGIN_COORDINATES;
 
@@ -324,29 +341,25 @@ function createCell(i: number, j: number, hasToken: boolean) {
 
   const rect = leaflet.rectangle(cellBounds);
   rect.addTo(map);
+  cellRects.set(key, rect);
 
   let tokenMarker: leaflet.Marker | undefined = undefined;
-  if (hasToken) {
+  if (cell.hasToken) {
     // Add visible token marker in the center of the cell
     const center = getCellCenter(i, j);
-
-    tokenMarker = createTokenMarker(DEFAULT_TOKEN_VALUE, center, map);
+    tokenMarker = createTokenMarker(cell.tokenValue!, center, map);
+    cellTokenMarkers.set(key, tokenMarker);
   }
 
-  grid[key] = {
-    hasToken,
-    tokenValue: hasToken ? DEFAULT_TOKEN_VALUE : null,
-    rect,
-    tokenMarker,
-  };
-
   rect.on("click", () => handleCellClick(i, j));
+
+  grid.set(key, cell);
 }
 
 // Function to handle cell clicks
 function handleCellClick(i: number, j: number) {
   const key = `${i},${j}`;
-  const cell = grid[key];
+  const cell = grid.get(key)!;
   const cellCenter = getCellCenter(i, j);
   const distance = getDistanceFromPlayer(i, j);
 
@@ -362,11 +375,11 @@ function handleCellClick(i: number, j: number) {
   if (cell.hasToken && cell.tokenValue !== null) {
     // If inventory is empty, pick up the token. Use popup and button to confirm
     if (inventory === null) {
-      pickUpToken(cellCenter, cell);
+      pickUpToken(cellCenter, cell, key);
       return;
     } // If inventory has a token of the same value, craft them together
     else if (cell.tokenValue === inventory) {
-      craftToken(cellCenter, cell);
+      craftToken(cellCenter, cell, key);
       return;
     } // If inventory has a different token, do nothing
     else {
@@ -387,7 +400,7 @@ function handleCellClick(i: number, j: number) {
       return;
     } else {
       // Allow player to place token from inventory into the cell
-      placeToken(cellCenter, cell);
+      placeToken(cellCenter, cell, key);
       return;
     }
   }
@@ -413,27 +426,26 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
       const cellID = `${i},${j}`;
       visibleCells.add(cellID);
 
-      if (!grid[cellID]) {
+      if (!grid.has(cellID)) {
         if (luck([i, j].toString()) < TOKEN_SPAWN_PROBABILITY) {
-          createCell(i, j, true);
+          createCell(i, j, { hasToken: true, tokenValue: DEFAULT_TOKEN_VALUE });
         } else {
-          createCell(i, j, false);
+          createCell(i, j, { hasToken: false, tokenValue: null });
         }
       }
     }
   }
 
   // Remove cells that are no longer visible
-  for (const cellID in grid) {
+  for (const cellID of grid.keys()) {
     if (!visibleCells.has(cellID)) {
-      const cell = grid[cellID];
-      if (cell.rect) {
-        map.removeLayer(cell.rect);
+      if (cellRects.has(cellID)) {
+        map.removeLayer(cellRects.get(cellID)!);
       }
-      if (cell.tokenMarker) {
-        map.removeLayer(cell.tokenMarker);
+      if (cellTokenMarkers.has(cellID)) {
+        map.removeLayer(cellTokenMarkers.get(cellID)!);
       }
-      delete grid[cellID];
+      grid.delete(cellID);
     }
   }
 }
