@@ -11,15 +11,19 @@ import "./_leafletWorkaround.ts";
 // Import luck function
 import luck from "./_luck.ts";
 
-// === Type Definitions ===
+// === Flyweight Implementation ===
 
+// Intrinsic state
 interface Cell {
   hasToken: boolean;
   tokenValue: number | null;
 }
 
+// Extrinsic visuals stored in maps
 const cellRects: Map<string, leaflet.Rectangle> = new Map();
 const cellTokenMarkers: Map<string, leaflet.Marker> = new Map();
+
+// === Memento Implementation ===
 
 // Memento class for storing snapshot of cell state
 class CellMemento {
@@ -270,7 +274,7 @@ function createPopup(
     .openOn(map);
 }
 
-// === Functions for core game actions ===
+// === Cell modifying actions ===
 
 function pickUpToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
   createPopup(
@@ -459,22 +463,24 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
       const cellID = `${i},${j}`;
       visibleCells.add(cellID);
 
-      // If cell is already modified, restore its state
-      if (modifiedCells.restore(cellID)) {
-        const restoredCell = modifiedCells.restore(cellID)!;
-        if (!grid.has(cellID)) {
-          createCell(i, j, restoredCell);
-        }
+      // If cell is already created, skip
+      if (grid.has(cellID)) {
+        continue;
+      }
+
+      // If cell has been modified before, restore its state
+      const restoredCell = modifiedCells.restore(cellID);
+      if (restoredCell) {
+        createCell(i, j, restoredCell);
         continue;
       }
 
       // If cell has never been modified, create it with default logic
-      if (!grid.has(cellID)) {
-        if (luck([i, j].toString()) < TOKEN_SPAWN_PROBABILITY) {
-          createCell(i, j, { hasToken: true, tokenValue: DEFAULT_TOKEN_VALUE });
-        } else {
-          createCell(i, j, { hasToken: false, tokenValue: null });
-        }
+      const spawnWithToken = luck([i, j].toString()) < TOKEN_SPAWN_PROBABILITY;
+      if (spawnWithToken) {
+        createCell(i, j, { hasToken: true, tokenValue: DEFAULT_TOKEN_VALUE });
+      } else {
+        createCell(i, j, { hasToken: false, tokenValue: null });
       }
     }
   }
@@ -486,10 +492,12 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
         map.removeLayer(cellRects.get(cellID)!);
         cellRects.delete(cellID);
       }
+
       if (cellTokenMarkers.has(cellID)) {
         map.removeLayer(cellTokenMarkers.get(cellID)!);
         cellTokenMarkers.delete(cellID);
       }
+
       grid.delete(cellID);
     }
   }
