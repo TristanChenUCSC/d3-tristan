@@ -20,7 +20,40 @@ interface Cell {
 
 const cellRects: Map<string, leaflet.Rectangle> = new Map();
 const cellTokenMarkers: Map<string, leaflet.Marker> = new Map();
-const modifiedCells: Map<string, Cell> = new Map();
+
+// Memento class for storing snapshot of cell state
+class CellMemento {
+  hasToken: boolean;
+  tokenValue: number | null;
+
+  constructor(cell: Cell) {
+    this.hasToken = cell.hasToken;
+    this.tokenValue = cell.tokenValue;
+  }
+}
+
+// Caretaker for tracking mementos of modified cells
+class ModifiedCells {
+  private mementos: Map<string, CellMemento> = new Map();
+
+  save(cellID: string, cell: Cell) {
+    this.mementos.set(cellID, new CellMemento(cell));
+  }
+
+  restore(cellID: string): Cell | null {
+    const memento = this.mementos.get(cellID);
+    if (memento) {
+      return {
+        hasToken: memento.hasToken,
+        tokenValue: memento.tokenValue,
+      };
+    } else {
+      return null;
+    }
+  }
+}
+
+const modifiedCells = new ModifiedCells();
 
 // === Game State ===
 
@@ -254,7 +287,7 @@ function pickUpToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
         map.removeLayer(marker!);
         cellTokenMarkers.delete(cellID);
       }
-      modifiedCells.set(cellID, cell);
+      modifiedCells.save(cellID, cell);
       map.closePopup();
     },
   );
@@ -286,7 +319,7 @@ function craftToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
         map,
       );
       cellTokenMarkers.set(cellID, newTokenMarker);
-      modifiedCells.set(cellID, cell);
+      modifiedCells.save(cellID, cell);
       map.closePopup();
     },
   );
@@ -308,7 +341,7 @@ function placeToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
         map,
       );
       cellTokenMarkers.set(cellID, newTokenMarker);
-      modifiedCells.set(cellID, cell);
+      modifiedCells.save(cellID, cell);
       map.closePopup();
     },
   );
@@ -426,6 +459,16 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
       const cellID = `${i},${j}`;
       visibleCells.add(cellID);
 
+      // If cell is already modified, restore its state
+      if (modifiedCells.restore(cellID)) {
+        const restoredCell = modifiedCells.restore(cellID)!;
+        if (!grid.has(cellID)) {
+          createCell(i, j, restoredCell);
+        }
+        continue;
+      }
+
+      // If cell has never been modified, create it with default logic
       if (!grid.has(cellID)) {
         if (luck([i, j].toString()) < TOKEN_SPAWN_PROBABILITY) {
           createCell(i, j, { hasToken: true, tokenValue: DEFAULT_TOKEN_VALUE });
@@ -441,9 +484,11 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
     if (!visibleCells.has(cellID)) {
       if (cellRects.has(cellID)) {
         map.removeLayer(cellRects.get(cellID)!);
+        cellRects.delete(cellID);
       }
       if (cellTokenMarkers.has(cellID)) {
         map.removeLayer(cellTokenMarkers.get(cellID)!);
+        cellTokenMarkers.delete(cellID);
       }
       grid.delete(cellID);
     }
