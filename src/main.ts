@@ -59,6 +59,88 @@ class ModifiedCells {
 
 const modifiedCells = new ModifiedCells();
 
+// === Facade Implementation ===
+
+// Facade
+interface MovementController {
+  start(): void;
+  stop(): void;
+  onMove(callback: (dLat: number, dLng: number) => void): void;
+}
+
+// Geolocation-based movement controller
+class GeolocationMovementController implements MovementController {
+  private callback: ((dLat: number, dLng: number) => void) | null = null;
+  private watchID: number | null = null;
+
+  start() {
+    if (navigator.geolocation) {
+      this.watchID = navigator.geolocation.watchPosition(
+        (position) => {
+          if (this.callback) {
+            this.callback(position.coords.latitude, position.coords.longitude);
+          }
+        },
+        (error) => console.error("Geolocation error:", error),
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 },
+      );
+    }
+  }
+
+  stop() {
+    if (this.watchID !== null) {
+      navigator.geolocation.clearWatch(this.watchID);
+      this.watchID = null;
+    }
+  }
+
+  onMove(callback: (dLat: number, dLng: number) => void) {
+    this.callback = callback;
+  }
+}
+
+// Button-based movement controller
+class ButtonMovementController implements MovementController {
+  private callback: ((dLat: number, dLng: number) => void) | null = null;
+  private step: number = TILE_DEGREES;
+
+  constructor(
+    private upButton: HTMLButtonElement,
+    private downButton: HTMLButtonElement,
+    private leftButton: HTMLButtonElement,
+    private rightButton: HTMLButtonElement,
+  ) {}
+
+  start() {
+    this.upButton.addEventListener("click", this.moveUp);
+    this.downButton.addEventListener("click", this.moveDown);
+    this.leftButton.addEventListener("click", this.moveLeft);
+    this.rightButton.addEventListener("click", this.moveRight);
+  }
+
+  stop() {
+    this.upButton.removeEventListener("click", this.moveUp);
+    this.downButton.removeEventListener("click", this.moveDown);
+    this.leftButton.removeEventListener("click", this.moveLeft);
+    this.rightButton.removeEventListener("click", this.moveRight);
+  }
+
+  onMove(callback: (dLat: number, dLng: number) => void) {
+    this.callback = callback;
+  }
+
+  private move = (dLat: number, dLng: number) => {
+    if (this.callback) {
+      this.callback(dLat, dLng);
+    }
+  };
+
+  private moveUp = () => this.move(this.step, 0);
+  private moveDown = () => this.move(-this.step, 0);
+  private moveLeft = () => this.move(0, -this.step);
+  private moveRight = () => this.move(0, this.step);
+}
+
 // === Game State ===
 
 // Location of Grid Origin
@@ -199,11 +281,8 @@ function updateInventoryUI() {
   }
 }
 
-function movePlayer(dLat: number, dLng: number) {
-  playerPosition = leaflet.latLng(
-    playerPosition.lat + dLat,
-    playerPosition.lng + dLng,
-  );
+function movePlayer(lat: number, lng: number) {
+  playerPosition = leaflet.latLng(lat, lng);
   playerMarker.setLatLng(playerPosition);
   playerRangeCircle.setLatLng(playerPosition);
   // Optionally pan the map to keep player in view
@@ -352,6 +431,25 @@ function placeToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
 }
 
 // === Main Game Logic ===
+
+// Movement controllers
+const geoMovement: MovementController = new GeolocationMovementController();
+geoMovement.onMove((lat, lng) => {
+  movePlayer(lat, lng);
+});
+
+const buttonMovement: MovementController = new ButtonMovementController(
+  upButton,
+  downButton,
+  leftButton,
+  rightButton,
+);
+buttonMovement.onMove((dLat, dLng) => {
+  movePlayer(playerPosition.lat + dLat, playerPosition.lng + dLng);
+});
+
+geoMovement.start();
+buttonMovement.start();
 
 // Player Inventory
 let inventory: number | null = null;
@@ -508,12 +606,6 @@ const initialBounds = map.getBounds();
 updateVisibleCells(initialBounds);
 
 // === Event Listeners ===
-
-// Button logic for moving the player 1 tile in each direction
-upButton.addEventListener("click", () => movePlayer(TILE_DEGREES, 0));
-downButton.addEventListener("click", () => movePlayer(-TILE_DEGREES, 0));
-leftButton.addEventListener("click", () => movePlayer(0, -TILE_DEGREES));
-rightButton.addEventListener("click", () => movePlayer(0, TILE_DEGREES));
 
 // Redraw grid if the map is moved
 map.on("moveend", () => {

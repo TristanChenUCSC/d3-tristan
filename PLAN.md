@@ -67,8 +67,8 @@ Key gameplay challenge: Can the user test the game with multiple gameplay sessio
 
 ### Steps
 
-- [ ] integrate browser geolocation API for geolocation-based movement
-- [ ] implement new player movement control system using the Facade design pattern
+- [x] integrate browser geolocation API for geolocation-based movement
+- [x] implement new player movement control system using the Facade design pattern
 - [ ] integrate browser localStorage API for game state to persist across page loads
 - [ ] add button that allows player to start a new game
 - [ ] add button that switches between button-based and geolocation-based movement
