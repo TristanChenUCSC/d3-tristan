@@ -55,6 +55,11 @@ class ModifiedCells {
       return null;
     }
   }
+
+  // Clear all saved mementos
+  clear(): void {
+    this.mementos.clear();
+  }
 }
 
 const modifiedCells = new ModifiedCells();
@@ -228,6 +233,20 @@ gamepad.appendChild(row2);
 gamepad.appendChild(row3);
 
 statusPanelDiv.appendChild(gamepad);
+
+// New Game button: clears persisted state and mementos, then reloads the page
+const newGameButton = document.createElement("button");
+newGameButton.id = "newGameButton";
+newGameButton.textContent = "New Game";
+controlPanelDiv.appendChild(newGameButton);
+newGameButton.addEventListener("click", () => {
+  // Clear persisted game state and in-memory mementos
+  localStorage.removeItem("gameState");
+  modifiedCells.clear();
+
+  // Reload the page to start a fresh session
+  location.reload();
+});
 
 // === Map Initialization ===
 
