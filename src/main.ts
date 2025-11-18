@@ -60,6 +60,19 @@ class ModifiedCells {
   clear(): void {
     this.mementos.clear();
   }
+
+  loadEntries(entries: [string, CellMemento][]) {
+    for (const [id, mem] of entries) {
+      this.mementos.set(id, mem);
+    }
+  }
+
+  toSerializable() {
+    return Array.from(
+      this.mementos.entries(),
+      ([id, m]) => [id, { hasToken: m.hasToken, tokenValue: m.tokenValue }],
+    );
+  }
 }
 
 const modifiedCells = new ModifiedCells();
@@ -234,21 +247,13 @@ gamepad.appendChild(row3);
 
 statusPanelDiv.appendChild(gamepad);
 
-// New Game button: clears persisted state and mementos, then reloads the page
+// New Game button
 const newGameButton = document.createElement("button");
 newGameButton.id = "newGameButton";
 newGameButton.textContent = "New Game";
 controlPanelDiv.appendChild(newGameButton);
-newGameButton.addEventListener("click", () => {
-  // Clear persisted game state and in-memory mementos
-  localStorage.removeItem("gameState");
-  modifiedCells.clear();
 
-  // Reload the page to start a fresh session
-  location.reload();
-});
-
-// Movement controller toggle buttons
+// Movement controller toggle UI
 const geoToggleButton = document.createElement("button");
 geoToggleButton.id = "geoToggle";
 geoToggleButton.className = "control-button";
@@ -261,43 +266,6 @@ buttonToggleButton.textContent = "Use Buttons";
 
 controlPanelDiv.appendChild(geoToggleButton);
 controlPanelDiv.appendChild(buttonToggleButton);
-
-// Track which controller is active ('geo' | 'buttons')
-let activeController: "geo" | "buttons" | null = null;
-
-function setActiveController(name: "geo" | "buttons") {
-  if (activeController === name) return;
-
-  // Stop currently active controller
-  if (activeController === "geo") {
-    geoMovement.stop();
-  } else if (activeController === "buttons") {
-    buttonMovement.stop();
-  }
-
-  // Start the requested controller and update UI
-  if (name === "geo") {
-    geoMovement.start();
-    geoToggleButton.classList.add("active");
-    buttonToggleButton.classList.remove("active");
-    // Hide the on-screen gamepad when geolocation is active
-    gamepad.style.display = "none";
-  } else {
-    buttonMovement.start();
-    buttonToggleButton.classList.add("active");
-    geoToggleButton.classList.remove("active");
-    // Show the on-screen gamepad when button controls are active
-    gamepad.style.display = "flex";
-  }
-
-  activeController = name;
-}
-
-geoToggleButton.addEventListener("click", () => setActiveController("geo"));
-buttonToggleButton.addEventListener(
-  "click",
-  () => setActiveController("buttons"),
-);
 
 // === Map Initialization ===
 
@@ -351,6 +319,34 @@ function updateInventoryUI() {
   }
 }
 
+function setActiveController(name: "geo" | "buttons") {
+  if (activeController === name) return;
+
+  // Stop currently active controller
+  if (activeController === "geo") {
+    geoMovement.stop();
+  } else if (activeController === "buttons") {
+    buttonMovement.stop();
+  }
+
+  // Start the requested controller and update UI
+  if (name === "geo") {
+    geoMovement.start();
+    geoToggleButton.classList.add("active");
+    buttonToggleButton.classList.remove("active");
+    // Hide the on-screen gamepad when geolocation is active
+    gamepad.style.display = "none";
+  } else {
+    buttonMovement.start();
+    buttonToggleButton.classList.add("active");
+    geoToggleButton.classList.remove("active");
+    // Show the on-screen gamepad when button controls are active
+    gamepad.style.display = "flex";
+  }
+
+  activeController = name;
+}
+
 function movePlayer(lat: number, lng: number) {
   playerPosition = leaflet.latLng(lat, lng);
   playerMarker.setLatLng(playerPosition);
@@ -398,6 +394,14 @@ function createTokenMarker(
   return tokenMarker;
 }
 
+function removeTokenMarker(cellID: string) {
+  if (cellTokenMarkers.has(cellID)) {
+    const marker = cellTokenMarkers.get(cellID);
+    map.removeLayer(marker!);
+    cellTokenMarkers.delete(cellID);
+  }
+}
+
 function createPopup(
   latLng: leaflet.LatLng,
   message: string,
@@ -435,11 +439,7 @@ function pickUpToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
       updateInventoryUI();
       cell.hasToken = false;
       cell.tokenValue = null;
-      if (cellTokenMarkers.has(cellID)) {
-        const marker = cellTokenMarkers.get(cellID);
-        map.removeLayer(marker!);
-        cellTokenMarkers.delete(cellID);
-      }
+      removeTokenMarker(cellID);
       modifiedCells.save(cellID, cell);
       map.closePopup();
     },
@@ -462,10 +462,7 @@ function craftToken(cellCenter: leaflet.LatLng, cell: Cell, cellID: string) {
       }
       inventory = null;
       updateInventoryUI();
-      if (cellTokenMarkers.has(cellID)) {
-        const marker = cellTokenMarkers.get(cellID);
-        map.removeLayer(marker!);
-      }
+      removeTokenMarker(cellID);
       const newTokenMarker = createTokenMarker(
         cell.tokenValue!,
         cellCenter,
@@ -517,6 +514,8 @@ const buttonMovement: MovementController = new ButtonMovementController(
 buttonMovement.onMove((dLat, dLng) => {
   movePlayer(playerPosition.lat + dLat, playerPosition.lng + dLng);
 });
+
+let activeController: "geo" | "buttons" | null = null;
 
 // Start with Geolocation controller by default
 setActiveController("geo");
@@ -642,11 +641,7 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
           cell.tokenValue = restoredCell.tokenValue;
 
           // Update marker
-          if (cellTokenMarkers.has(cellID)) {
-            map.removeLayer(cellTokenMarkers.get(cellID)!);
-            cellTokenMarkers.delete(cellID);
-          }
-
+          removeTokenMarker(cellID);
           if (cell.hasToken) {
             const center = getCellCenter(i, j);
             const tokenMarker = createTokenMarker(
@@ -685,10 +680,7 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
         cellRects.delete(cellID);
       }
 
-      if (cellTokenMarkers.has(cellID)) {
-        map.removeLayer(cellTokenMarkers.get(cellID)!);
-        cellTokenMarkers.delete(cellID);
-      }
+      removeTokenMarker(cellID);
 
       grid.delete(cellID);
     }
@@ -717,6 +709,20 @@ globalThis.addEventListener("load", () => {
   loadGameState();
 });
 
+newGameButton.addEventListener("click", () => {
+  localStorage.removeItem("gameState");
+  modifiedCells.clear();
+
+  // Reload the page to start a fresh session
+  location.reload();
+});
+
+geoToggleButton.addEventListener("click", () => setActiveController("geo"));
+buttonToggleButton.addEventListener(
+  "click",
+  () => setActiveController("buttons"),
+);
+
 // === Save/Load Game State ===
 
 function saveGameState() {
@@ -726,16 +732,7 @@ function saveGameState() {
       lng: playerPosition.lng,
     },
     inventory: inventory,
-    modifiedCells: Array.from(
-      modifiedCells["mementos"].entries().map(
-        (
-          [cellID, memento],
-        ) => [cellID, {
-          hasToken: memento.hasToken,
-          tokenValue: memento.tokenValue,
-        }],
-      ),
-    ),
+    modifiedCells: modifiedCells.toSerializable(),
     victoryState: victoryState,
   };
 
@@ -751,10 +748,7 @@ function loadGameState() {
     inventory = gameState.inventory;
     updateInventoryUI();
     victoryState = gameState.victoryState;
-
-    for (const [cellID, cellData] of gameState.modifiedCells) {
-      modifiedCells["mementos"].set(cellID, new CellMemento(cellData));
-    }
+    modifiedCells.loadEntries(gameState.modifiedCells);
 
     const bounds = map.getBounds();
     updateVisibleCells(bounds);
