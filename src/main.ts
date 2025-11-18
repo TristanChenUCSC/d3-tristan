@@ -561,13 +561,37 @@ function updateVisibleCells(bounds: leaflet.LatLngBounds) {
       const cellID = `${i},${j}`;
       visibleCells.add(cellID);
 
-      // If cell is already created, skip
+      // Restore modified cell
+      const restoredCell = modifiedCells.restore(cellID);
+
       if (grid.has(cellID)) {
+        if (restoredCell) {
+          // Update existing cell's state to restored state
+          const cell = grid.get(cellID)!;
+          cell.hasToken = restoredCell.hasToken;
+          cell.tokenValue = restoredCell.tokenValue;
+
+          // Update marker
+          if (cellTokenMarkers.has(cellID)) {
+            map.removeLayer(cellTokenMarkers.get(cellID)!);
+            cellTokenMarkers.delete(cellID);
+          }
+
+          if (cell.hasToken) {
+            const center = getCellCenter(i, j);
+            const tokenMarker = createTokenMarker(
+              cell.tokenValue!,
+              center,
+              map,
+            );
+            cellTokenMarkers.set(cellID, tokenMarker);
+          }
+        }
+
         continue;
       }
 
-      // If cell has been modified before, restore its state
-      const restoredCell = modifiedCells.restore(cellID);
+      // Create cell from restored state if it exists
       if (restoredCell) {
         createCell(i, j, restoredCell);
         continue;
@@ -612,3 +636,57 @@ map.on("moveend", () => {
   const bounds = map.getBounds();
   updateVisibleCells(bounds);
 });
+
+// Save game state when the page is unloaded
+globalThis.addEventListener("beforeunload", () => {
+  saveGameState();
+});
+
+// Load game state when the page is loaded
+globalThis.addEventListener("load", () => {
+  loadGameState();
+});
+
+// === Save/Load Game State ===
+
+function saveGameState() {
+  const gameState = {
+    playerPosition: {
+      lat: playerPosition.lat,
+      lng: playerPosition.lng,
+    },
+    inventory: inventory,
+    modifiedCells: Array.from(
+      modifiedCells["mementos"].entries().map(
+        (
+          [cellID, memento],
+        ) => [cellID, {
+          hasToken: memento.hasToken,
+          tokenValue: memento.tokenValue,
+        }],
+      ),
+    ),
+    victoryState: victoryState,
+  };
+
+  localStorage.setItem("gameState", JSON.stringify(gameState));
+}
+
+function loadGameState() {
+  const savedState = localStorage.getItem("gameState");
+  if (savedState) {
+    const gameState = JSON.parse(savedState);
+
+    movePlayer(gameState.playerPosition.lat, gameState.playerPosition.lng);
+    inventory = gameState.inventory;
+    updateInventoryUI();
+    victoryState = gameState.victoryState;
+
+    for (const [cellID, cellData] of gameState.modifiedCells) {
+      modifiedCells["mementos"].set(cellID, new CellMemento(cellData));
+    }
+
+    const bounds = map.getBounds();
+    updateVisibleCells(bounds);
+  }
+}
