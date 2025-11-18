@@ -71,5 +71,5 @@ Key gameplay challenge: Can the user test the game with multiple gameplay sessio
 - [x] implement new player movement control system using the Facade design pattern
 - [x] integrate browser localStorage API for game state to persist across page loads
 - [x] add button that allows player to start a new game
-- [ ] add button that switches between button-based and geolocation-based movement
+- [x] add button that switches between button-based and geolocation-based movement
 - [ ] clean up and refactor code before finishing D3.d

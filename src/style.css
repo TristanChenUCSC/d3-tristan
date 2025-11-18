@@ -110,3 +110,20 @@
 .gamepad-button:active {
   transform: translateY(1px);
 }
+
+/* Control panel buttons for movement controller selection */
+#controlPanel .control-button {
+  margin-left: 8px;
+  margin-right: 4px;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  background: white;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+#controlPanel .control-button.active {
+  background: #2b8f6a;
+  color: white;
+  border-color: #1f6f4f;
+}

@@ -248,6 +248,57 @@ newGameButton.addEventListener("click", () => {
   location.reload();
 });
 
+// Movement controller toggle buttons
+const geoToggleButton = document.createElement("button");
+geoToggleButton.id = "geoToggle";
+geoToggleButton.className = "control-button";
+geoToggleButton.textContent = "Use Geolocation";
+
+const buttonToggleButton = document.createElement("button");
+buttonToggleButton.id = "buttonToggle";
+buttonToggleButton.className = "control-button";
+buttonToggleButton.textContent = "Use Buttons";
+
+controlPanelDiv.appendChild(geoToggleButton);
+controlPanelDiv.appendChild(buttonToggleButton);
+
+// Track which controller is active ('geo' | 'buttons')
+let activeController: "geo" | "buttons" | null = null;
+
+function setActiveController(name: "geo" | "buttons") {
+  if (activeController === name) return;
+
+  // Stop currently active controller
+  if (activeController === "geo") {
+    geoMovement.stop();
+  } else if (activeController === "buttons") {
+    buttonMovement.stop();
+  }
+
+  // Start the requested controller and update UI
+  if (name === "geo") {
+    geoMovement.start();
+    geoToggleButton.classList.add("active");
+    buttonToggleButton.classList.remove("active");
+    // Hide the on-screen gamepad when geolocation is active
+    gamepad.style.display = "none";
+  } else {
+    buttonMovement.start();
+    buttonToggleButton.classList.add("active");
+    geoToggleButton.classList.remove("active");
+    // Show the on-screen gamepad when button controls are active
+    gamepad.style.display = "flex";
+  }
+
+  activeController = name;
+}
+
+geoToggleButton.addEventListener("click", () => setActiveController("geo"));
+buttonToggleButton.addEventListener(
+  "click",
+  () => setActiveController("buttons"),
+);
+
 // === Map Initialization ===
 
 // Create the map
@@ -467,8 +518,8 @@ buttonMovement.onMove((dLat, dLng) => {
   movePlayer(playerPosition.lat + dLat, playerPosition.lng + dLng);
 });
 
-geoMovement.start();
-buttonMovement.start();
+// Start with Geolocation controller by default
+setActiveController("geo");
 
 // Player Inventory
 let inventory: number | null = null;
