@@ -59,3 +59,17 @@ Key gameplay challenge: Can you fix a gameplay bug where players can farm tokens
 - [x] use memento pattern to preserve the state of modified cells
 - [x] create cells that appear to keep their states even when they are off-screen
 - [x] clean up and refactor code before finishing D3.c
+
+## D3.d: Gameplay across real-world space and time
+
+Key technical challenges: Can your software remember game state even when the page is closed? Is the player character’s in-game movement controlled by the real-world geolocation of their device?
+Key gameplay challenge: Can the user test the game with multiple gameplay sessions, some involving real-world movement and some involving simulated movement?
+
+### Steps
+
+- [ ] integrate browser geolocation API for geolocation-based movement
+- [ ] implement new player movement control system using the Facade design pattern
+- [ ] integrate browser localStorage API for game state to persist across page loads
+- [ ] add button that allows player to start a new game
+- [ ] add button that switches between button-based and geolocation-based movement
+- [ ] clean up and refactor code before finishing D3.d
