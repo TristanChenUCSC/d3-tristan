@@ -699,19 +699,21 @@ map.on("moveend", () => {
   updateVisibleCells(bounds);
 });
 
-// Save game state when the page is unloaded
-globalThis.addEventListener("beforeunload", () => {
-  saveGameState();
-});
+// load game state on page load
+document.addEventListener("DOMContentLoaded", loadGameState);
 
-// Load game state when the page is loaded
-globalThis.addEventListener("load", () => {
-  loadGameState();
+// Save game state when the page is hidden or unloaded
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    saveGameState();
+  }
 });
 
 newGameButton.addEventListener("click", () => {
   localStorage.removeItem("gameState");
   modifiedCells.clear();
+  inventory = null;
+  victoryState = false;
 
   // Reload the page to start a fresh session
   location.reload();
